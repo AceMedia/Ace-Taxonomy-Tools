@@ -47,6 +47,7 @@ final class Ace_Taxonomy_Tools_Batch_Editor {
     }
 
     public function enqueue(): void {
+        wp_enqueue_media();
         $asset_file = ACE_TAXONOMY_TOOLS_PATH . 'build/batch-editor.asset.php';
         $asset      = file_exists( $asset_file ) ? include $asset_file : [ 'dependencies' => [], 'version' => ACE_TAXONOMY_TOOLS_VERSION ];
         wp_enqueue_script( 'ace-taxonomy-tools-batch', ACE_TAXONOMY_TOOLS_URL . 'build/batch-editor.js', $asset['dependencies'] ?? [], $asset['version'] ?? ACE_TAXONOMY_TOOLS_VERSION, true );

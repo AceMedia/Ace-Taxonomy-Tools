@@ -78,7 +78,7 @@ final class Ace_Taxonomy_Tools {
         $registered = get_registered_meta_keys( 'term', $taxonomy ) + get_registered_meta_keys( 'term', '' );
         foreach ( $registered as $key => $args ) {
             $fields[ $key ] = [
-                'label'  => $args['label'] ?? ( $args['description'] ?: $key ),
+                'label'  => ( $args['label'] ?? '' ) ?: ( ( $args['description'] ?? '' ) ?: $key ),
                 'type'   => $args['type'] ?? 'string',
                 'source' => 'meta',
             ];
@@ -90,8 +90,33 @@ final class Ace_Taxonomy_Tools {
 
         /**
          * Add fields the batch editor cannot discover (meta without register_term_meta,
-         * or select options for a key). Shape: key => [label, type, source, options].
+         * or select options for a key). Shape: key => [label, type, source, options, input].
+         * input: text | textarea | number | checkbox | select | color | media | url | date.
          */
-        return apply_filters( 'ace_taxonomy_tools_fields', $fields, $taxonomy );
+        $fields = apply_filters( 'ace_taxonomy_tools_fields', $fields, $taxonomy );
+        foreach ( $fields as $key => &$field ) {
+            if ( ! empty( $field['input'] ) ) {
+                continue;
+            }
+            if ( ! empty( $field['options'] ) ) {
+                $field['input'] = 'select';
+            } elseif ( 'boolean' === $field['type'] ) {
+                $field['input'] = 'checkbox';
+            } elseif ( in_array( $field['type'], [ 'integer', 'number' ], true ) ) {
+                $field['input'] = preg_match( '/(image|logo|icon|thumbnail|attachment|media)(_id)?$/i', $key ) ? 'media' : 'number';
+            } elseif ( 'text' === $field['type'] || 'description' === $key ) {
+                $field['input'] = 'textarea';
+            } elseif ( preg_match( '/colou?r/i', $key ) ) {
+                $field['input'] = 'color';
+            } elseif ( preg_match( '/(_url|_src|_link)$/i', $key ) ) {
+                $field['input'] = 'url';
+            } elseif ( preg_match( '/(_date|_at)$/i', $key ) ) {
+                $field['input'] = 'date';
+            } else {
+                $field['input'] = 'text';
+            }
+        }
+        unset( $field );
+        return $fields;
     }
 }

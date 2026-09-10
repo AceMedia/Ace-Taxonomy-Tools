@@ -33,7 +33,7 @@ final class Ace_Taxonomy_Tools_Guide {
                 'content' => '
 <p><strong>Choose a taxonomy.</strong> For hierarchical taxonomies you can filter to the children of one parent (enter its id; <code>0</code> means top level, <code>-1</code> means everything). Search narrows by name.</p>
 <p><strong>Tick the fields you want to edit.</strong> Core fields (name, slug, description, parent) are always there; the rest come from whatever term meta is registered for that taxonomy, plus the Retired flag where enabled. Untick what you are not touching so the table stays narrow.</p>
-<p><strong>Edit inline.</strong> Each row saves by itself the moment you leave a field. The status column tells you what changed; a row that did not change is skipped, so nothing is rewritten needlessly and Ace Revisions only sees real edits.</p>
+<p><strong>Edit inline.</strong> Inputs follow the field: colour picker, media picker, select, date, URL. Press <kbd>Enter</kbd> to save and drop to the same field on the next row (<kbd>Shift+Enter</kbd> goes up); click a column header to sort the page. Each row saves by itself the moment you leave a field. The status column tells you what changed; a row that did not change is skipped, so nothing is rewritten needlessly and Ace Revisions only sees real edits.</p>
 <p><strong>Bulk apply.</strong> Tick the rows (or "All" on this page), pick one field, enter a value and press Apply. Booleans take <code>1</code> or empty. The run is grouped under one Ace Revisions batch id.</p>
 <p><strong>Walk-through.</strong> Switch it on to see one term at a time with Previous / Next. Useful for the "go through every team and fill in two things" job. Where you got to is remembered in the browser.</p>',
             ],
@@ -50,7 +50,7 @@ final class Ace_Taxonomy_Tools_Guide {
     }
     return $fields;
 }, 10, 2 );</pre>
-<p>Add an <code>options</code> array to a field to get a select. A key containing "colour" with a hex value gets a colour picker.</p>',
+<p>Add an <code>options</code> array to a field to get a select, or set <code>input</code> to <code>color</code>, <code>media</code>, <code>textarea</code>, <code>date</code>, <code>url</code> or <code>number</code>. Keys containing "colour" and ids ending in image/logo/icon are detected automatically.</p>',
             ],
             'retired' => [
                 'title'   => __( 'Retired terms', 'ace-taxonomy-tools' ),

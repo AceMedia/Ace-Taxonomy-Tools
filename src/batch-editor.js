@@ -20,6 +20,7 @@ const state = {
 	fields: {},
 	chosen: [],
 	terms: [],
+	sort: { key: '', dir: 1 },
 	walk: false,
 	walkIndex: 0,
 	parents: [],
@@ -97,24 +98,62 @@ async function loadTerms() {
 function fieldInput( term, key, onChange ) {
 	const def = state.fields[ key ];
 	const value = term.values[ key ];
-	const common = { 'data-term': term.id, 'data-field': key, onchange: onChange };
-	if ( def.type === 'boolean' ) {
-		return el( 'input', { type: 'checkbox', ...common, ...( value ? { checked: '' } : {} ) } );
+	const common = { 'data-term': term.id, 'data-field': key, onchange: onChange, onkeydown: keyNav };
+	switch ( def.input ) {
+		case 'checkbox':
+			return el( 'input', { type: 'checkbox', ...common, checked: !! value } );
+		case 'select':
+			return el( 'select', common, [ el( 'option', { value: '' }, '—' ), ...Object.entries( def.options || {} ).map( ( [ v, label ] ) => el( 'option', { value: v, selected: String( value ) === String( v ) }, label ) ) ] );
+		case 'textarea':
+			return el( 'textarea', { rows: 2, ...common }, value ?? '' );
+		case 'number':
+			return el( 'input', { type: 'number', value: value ?? '', ...common } );
+		case 'date':
+			return el( 'input', { type: /_at$/.test( key ) ? 'datetime-local' : 'date', value: value ?? '', ...common } );
+		case 'url':
+			return el( 'input', { type: 'url', value: value ?? '', ...common } );
+		case 'color': {
+			// Always a colour picker. No value = hatched swatch + "none"; the × clears it.
+			const hex = /^#?[0-9a-f]{6}$/i.test( value || '' ) ? ( value.startsWith( '#' ) ? value : `#${ value }` ) : '';
+			const hidden = el( 'input', { type: 'hidden', value: value ?? '', ...common } );
+			const label = el( 'span', { class: 'ace-tax-color__hex' }, hex || 'none' );
+			const pick = el( 'input', { type: 'color', class: 'ace-tax-color__pick' + ( hex ? '' : ' is-empty' ), value: hex || '#ffffff', title: hex || 'No colour set', oninput: ( e ) => { hidden.value = e.target.value; label.textContent = e.target.value; e.target.classList.remove( 'is-empty' ); queueSave( hidden ); }, onkeydown: keyNav } );
+			const clear = el( 'button', { type: 'button', class: 'ace-tax-color__clear', 'aria-label': 'Clear colour', title: 'Clear colour', hidden: ! hex, onclick: () => { hidden.value = ''; label.textContent = 'none'; pick.value = '#ffffff'; pick.classList.add( 'is-empty' ); clear.hidden = true; queueSave( hidden ); } }, '×' );
+			pick.addEventListener( 'input', () => { clear.hidden = false; } );
+			return el( 'span', { class: 'ace-tax-color' }, [ pick, label, clear, hidden ] );
+		}
+		case 'media': {
+			const hidden = el( 'input', { type: 'hidden', value: value ?? '', ...common } );
+			const preview = el( 'span', { class: 'ace-tax-media__preview' }, value ? `#${ value }` : '' );
+			const pickBtn = el( 'button', { type: 'button', class: 'button button-small', onclick: () => {
+				if ( ! window.wp?.media ) return;
+				const frame = window.wp.media( { multiple: false } );
+				frame.on( 'select', () => {
+					const att = frame.state().get( 'selection' ).first().toJSON();
+					hidden.value = att.id; preview.textContent = att.filename || `#${ att.id }`; queueSave( hidden );
+				} );
+				frame.open();
+			} }, value ? 'Change' : 'Choose' );
+			const clearBtn = el( 'button', { type: 'button', class: 'button-link-delete', onclick: () => { hidden.value = ''; preview.textContent = ''; queueSave( hidden ); } }, '×' );
+			return el( 'span', { class: 'ace-tax-media' }, [ hidden, preview, pickBtn, clearBtn ] );
+		}
+		default:
+			return el( 'input', { type: 'text', value: value ?? '', ...common } );
 	}
-	if ( def.options ) {
-		const select = el( 'select', common, Object.entries( def.options ).map( ( [ v, label ] ) => el( 'option', { value: v, ...( String( value ) === String( v ) ? { selected: '' } : {} ) }, label ) ) );
-		return select;
-	}
-	if ( def.type === 'text' ) {
-		return el( 'textarea', { rows: 2, ...common }, value ?? '' );
-	}
-	if ( def.type === 'integer' || def.type === 'number' ) {
-		return el( 'input', { type: 'number', value: value ?? '', ...common } );
-	}
-	if ( /colou?r/i.test( key ) && /^#?[0-9a-f]{6}$/i.test( value || '' ) ) {
-		return el( 'input', { type: 'color', value: value.startsWith( '#' ) ? value : `#${ value }`, ...common } );
-	}
-	return el( 'input', { type: 'text', value: value ?? '', ...common } );
+}
+
+/**
+ * Enter saves and moves to the same field on the next row; Shift+Enter goes up.
+ */
+function keyNav( e ) {
+	if ( e.key !== 'Enter' || e.target.tagName === 'TEXTAREA' ) return;
+	e.preventDefault();
+	const input = e.target;
+	queueSave( input );
+	const row = input.closest( 'tr' );
+	const next = e.shiftKey ? row?.previousElementSibling : row?.nextElementSibling;
+	const target = next?.querySelector( `[data-field="${ input.dataset.field }"]` );
+	if ( target ) { target.focus(); if ( target.select ) target.select(); }
 }
 
 function readInput( input ) {
@@ -193,21 +232,41 @@ function render() {
 		el( 'label', {}, [ el( 'input', { type: 'checkbox', value: key, ...( state.chosen.includes( key ) ? { checked: '' } : {} ), onchange: ( e ) => { state.chosen = e.target.checked ? [ ...state.chosen, key ] : state.chosen.filter( ( k ) => k !== key ); persist(); render(); } } ), ` ${ def.label } `, el( 'code', {}, key ) ] )
 	) ) );
 
-	// Bulk bar
-	const bulkField = el( 'select', {}, state.chosen.map( ( k ) => el( 'option', { value: k }, state.fields[ k ].label ) ) );
-	const bulkValue = el( 'input', { type: 'text', placeholder: 'Value (1 / empty for booleans)' } );
+	// Bulk bar: the value input follows the chosen field's type
+	const bulkValueWrap = el( 'span', { class: 'ace-tax-bulk-value' } );
+	const bulkValueFor = ( k ) => {
+		const def = state.fields[ k ] || {};
+		if ( def.input === 'checkbox' ) return el( 'select', {}, [ el( 'option', { value: '1' }, 'Yes' ), el( 'option', { value: '' }, 'No' ) ] );
+		if ( def.input === 'select' ) return el( 'select', {}, [ el( 'option', { value: '' }, '—' ), ...Object.entries( def.options || {} ).map( ( [ v, l ] ) => el( 'option', { value: v }, l ) ) ] );
+		if ( def.input === 'color' ) return el( 'input', { type: 'text', placeholder: '#rrggbb' } );
+		if ( def.input === 'number' || def.input === 'media' ) return el( 'input', { type: 'number', placeholder: def.input === 'media' ? 'Attachment id' : 'Value' } );
+		return el( 'input', { type: 'text', placeholder: 'Value' } );
+	};
+	const bulkField = el( 'select', { onchange: ( e ) => bulkValueWrap.replaceChildren( bulkValueFor( e.target.value ) ) }, state.chosen.map( ( k ) => el( 'option', { value: k }, state.fields[ k ].label ) ) );
+	bulkValueWrap.replaceChildren( bulkValueFor( state.chosen[ 0 ] ) );
+	const bulkValue = { get value() { return bulkValueWrap.firstChild ? bulkValueWrap.firstChild.value : ''; } };
 	const bulkBtn = el( 'button', { class: 'button button-primary', onclick: () => {
 		const ids = [ ...root.querySelectorAll( '.ace-tax-pick:checked' ) ].map( ( c ) => parseInt( c.value, 10 ) );
 		if ( ! ids.length || ! bulkField.value ) return;
 		if ( ! window.confirm( CFG.i18n.apply.replace( '%d', ids.length ) + '?' ) ) return;
 		bulkApply( ids, bulkField.value, bulkValue.value );
 	} }, 'Apply to ticked' );
-	root.append( el( 'div', { class: 'ace-tax-bulk' }, [ el( 'label', {}, [ el( 'input', { type: 'checkbox', onchange: ( e ) => root.querySelectorAll( '.ace-tax-pick' ).forEach( ( c ) => { c.checked = e.target.checked; } ) } ), ' All' ] ), bulkField, bulkValue, bulkBtn, el( 'span', { class: 'ace-tax-bulk-status' } ) ] ) );
+	root.append( el( 'div', { class: 'ace-tax-bulk' }, [ el( 'label', {}, [ el( 'input', { type: 'checkbox', onchange: ( e ) => root.querySelectorAll( '.ace-tax-pick' ).forEach( ( c ) => { c.checked = e.target.checked; } ) } ), ' All' ] ), bulkField, bulkValueWrap, bulkBtn, el( 'span', { class: 'ace-tax-bulk-status' } ) ] ) );
 
 	// Table or walk-through
-	const rows = state.walk ? state.terms.slice( state.walkIndex, state.walkIndex + 1 ) : state.terms;
+	let ordered = [ ...state.terms ];
+	if ( state.sort.key ) {
+		const k = state.sort.key;
+		ordered.sort( ( a, b ) => {
+			const av = k === 'count' ? a.count : a.values[ k ] ?? '';
+			const bv = k === 'count' ? b.count : b.values[ k ] ?? '';
+			return ( typeof av === 'number' && typeof bv === 'number' ? av - bv : String( av ).localeCompare( String( bv ), undefined, { numeric: true } ) ) * state.sort.dir;
+		} );
+	}
+	const rows = state.walk ? ordered.slice( state.walkIndex, state.walkIndex + 1 ) : ordered;
+	const th = ( k, label ) => el( 'th', { class: 'ace-tax-sort' + ( state.sort.key === k ? ' is-sorted' : '' ), title: 'Sort', onclick: () => { state.sort = state.sort.key === k ? { key: k, dir: -state.sort.dir } : { key: k, dir: 1 }; render(); } }, `${ label }${ state.sort.key === k ? ( state.sort.dir > 0 ? ' ▲' : ' ▼' ) : '' }` );
 	const table = el( 'table', { class: 'widefat striped ace-tax-table' }, [
-		el( 'thead', {}, el( 'tr', {}, [ el( 'th', {} ), el( 'th', {}, 'ID' ), ...state.chosen.map( ( k ) => el( 'th', {}, state.fields[ k ].label ) ), el( 'th', {}, 'Posts' ), el( 'th', {}, 'Status' ) ] ) ),
+		el( 'thead', {}, el( 'tr', {}, [ el( 'th', {} ), el( 'th', {}, 'ID' ), ...state.chosen.map( ( k ) => th( k, state.fields[ k ].label ) ), th( 'count', 'Posts' ), el( 'th', {}, 'Status' ) ] ) ),
 		el( 'tbody', {}, rows.map( ( term ) => el( 'tr', { 'data-row': term.id }, [
 			el( 'td', {}, el( 'input', { type: 'checkbox', class: 'ace-tax-pick', value: term.id } ) ),
 			el( 'td', {}, el( 'a', { href: term.link, target: '_blank', rel: 'noopener' }, String( term.id ) ) ),

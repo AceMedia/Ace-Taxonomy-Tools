@@ -2073,6 +2073,62 @@ body.admin-color-midnight {
             min-width: 120px;
         }
 
+        .ace-tax-sort {
+            cursor: pointer;
+            user-select: none;
+
+            &.is-sorted {
+                color: $primary-color;
+            }
+        }
+
+        .ace-tax-color {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+
+            &__pick {
+                width: 40px;
+                min-width: 40px;
+                height: 30px;
+                padding: 0 2px;
+                cursor: pointer;
+
+                &.is-empty {
+                    background: repeating-linear-gradient(45deg, #fff 0 4px, #dcdcde 4px 8px);
+                    opacity: 0.7;
+                }
+            }
+
+            &__hex {
+                font-family: monospace;
+                font-size: 12px;
+                min-width: 60px;
+                opacity: 0.8;
+            }
+
+            &__clear {
+                border: 0;
+                background: none;
+                cursor: pointer;
+                color: #d63638;
+                font-size: 16px;
+                line-height: 1;
+                padding: 0 4px;
+            }
+        }
+
+        .ace-tax-media {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+
+            &__preview {
+                font-size: 12px;
+                opacity: 0.7;
+            }
+        }
+
         tr.is-saved .ace-tax-status {
             color: #00a32a;
         }
