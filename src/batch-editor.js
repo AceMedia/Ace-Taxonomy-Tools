@@ -98,7 +98,7 @@ async function loadTerms() {
 function fieldInput( term, key, onChange ) {
 	const def = state.fields[ key ];
 	const value = term.values[ key ];
-	const common = { 'data-term': term.id, 'data-field': key, onchange: onChange, onkeydown: keyNav };
+	const common = { 'data-term': term.id, 'data-field': key, onchange: onChange };
 	switch ( def.input ) {
 		case 'checkbox':
 			return el( 'input', { type: 'checkbox', ...common, checked: !! value } );
@@ -117,7 +117,7 @@ function fieldInput( term, key, onChange ) {
 			const hex = /^#?[0-9a-f]{6}$/i.test( value || '' ) ? ( value.startsWith( '#' ) ? value : `#${ value }` ) : '';
 			const hidden = el( 'input', { type: 'hidden', value: value ?? '', ...common } );
 			const label = el( 'span', { class: 'ace-tax-color__hex' }, hex || 'none' );
-			const pick = el( 'input', { type: 'color', class: 'ace-tax-color__pick' + ( hex ? '' : ' is-empty' ), value: hex || '#ffffff', title: hex || 'No colour set', oninput: ( e ) => { hidden.value = e.target.value; label.textContent = e.target.value; e.target.classList.remove( 'is-empty' ); queueSave( hidden ); }, onkeydown: keyNav } );
+			const pick = el( 'input', { type: 'color', class: 'ace-tax-color__pick' + ( hex ? '' : ' is-empty' ), value: hex || '#ffffff', title: hex || 'No colour set', oninput: ( e ) => { hidden.value = e.target.value; label.textContent = e.target.value; e.target.classList.remove( 'is-empty' ); queueSave( hidden ); } } );
 			const clear = el( 'button', { type: 'button', class: 'ace-tax-color__clear', 'aria-label': 'Clear colour', title: 'Clear colour', hidden: ! hex, onclick: () => { hidden.value = ''; label.textContent = 'none'; pick.value = '#ffffff'; pick.classList.add( 'is-empty' ); clear.hidden = true; queueSave( hidden ); } }, '×' );
 			pick.addEventListener( 'input', () => { clear.hidden = false; } );
 			return el( 'span', { class: 'ace-tax-color' }, [ pick, label, clear, hidden ] );
@@ -143,17 +143,98 @@ function fieldInput( term, key, onChange ) {
 }
 
 /**
- * Enter saves and moves to the same field on the next row; Shift+Enter goes up.
+ * Keyboard model, from whichever cell has focus:
+ *   Enter          save this cell, move to the same field on the next row
+ *   Shift+Enter    save, move to the same field on the previous row
+ *   Ctrl/Cmd+Enter save and stay
+ *   ↑ / ↓          same field, previous / next row (no save until you leave)
+ *   Tab / Shift+Tab next / previous field (browser default)
+ *   Ctrl/Cmd+↓ / ↑ last / first row of the page
+ *   Alt+→ / Alt+←  next / previous page
+ *   Esc            put the cell back to its loaded value
+ * Selects and checkboxes keep their native keys; the row shortcuts still apply.
  */
+const KEYS = [
+	[ 'Enter', 'save, next row' ], [ 'Shift+Enter', 'save, previous row' ], [ 'Ctrl+Enter', 'save, stay' ],
+	[ '↑ ↓', 'same field, row up/down' ], [ 'Tab', 'next field' ], [ 'Ctrl+↑ ↓', 'first / last row' ],
+	[ 'Alt+← →', 'previous / next page' ], [ 'Esc', 'undo cell' ],
+];
+
+function cellOf( node ) {
+	return node && node.closest ? node.closest( '[data-field]' ) || node.closest( 'td' )?.querySelector( '[data-field]' ) : null;
+}
+
+function focusCell( row, field ) {
+	if ( ! row ) return false;
+	const cell = row.querySelector( `[data-field="${ field }"]` );
+	const target = cell ? ( cell.type === 'hidden' ? cell.parentElement.querySelector( 'input:not([type=hidden]),button' ) : cell ) : null;
+	if ( ! target ) return false;
+	target.focus();
+	if ( target.select && target.type !== 'color' ) target.select();
+	return true;
+}
+
 function keyNav( e ) {
-	if ( e.key !== 'Enter' || e.target.tagName === 'TEXTAREA' ) return;
-	e.preventDefault();
-	const input = e.target;
-	queueSave( input );
+	const input = cellOf( e.target );
+	if ( ! input ) return;
 	const row = input.closest( 'tr' );
-	const next = e.shiftKey ? row?.previousElementSibling : row?.nextElementSibling;
-	const target = next?.querySelector( `[data-field="${ input.dataset.field }"]` );
-	if ( target ) { target.focus(); if ( target.select ) target.select(); }
+	const field = input.dataset.field;
+	const mod = e.ctrlKey || e.metaKey;
+	const inText = e.target.tagName === 'TEXTAREA';
+
+	if ( e.key === 'Enter' && ! ( inText && ! mod && ! e.shiftKey ) ) {
+		e.preventDefault();
+		queueSave( input );
+		if ( mod ) return;
+		if ( ! focusCell( e.shiftKey ? row.previousElementSibling : row.nextElementSibling, field ) && ! e.shiftKey ) pageStep( 1, field );
+		return;
+	}
+	if ( ( e.key === 'ArrowDown' || e.key === 'ArrowUp' ) && ! inText && e.target.tagName !== 'SELECT' ) {
+		e.preventDefault();
+		const body = row.parentElement;
+		const target = mod ? ( e.key === 'ArrowDown' ? body.lastElementChild : body.firstElementChild ) : ( e.key === 'ArrowDown' ? row.nextElementSibling : row.previousElementSibling );
+		focusCell( target, field );
+		return;
+	}
+	if ( e.altKey && ( e.key === 'ArrowRight' || e.key === 'ArrowLeft' ) ) {
+		e.preventDefault();
+		pageStep( e.key === 'ArrowRight' ? 1 : -1, field );
+		return;
+	}
+	if ( e.key === 'Escape' ) {
+		const term = state.terms.find( ( t ) => t.id === parseInt( input.dataset.term, 10 ) );
+		if ( term ) {
+			const v = term.values[ field ];
+			if ( input.type === 'checkbox' ) input.checked = !! v; else input.value = v ?? '';
+			if ( input.type === 'hidden' ) { render(); focusCell( document.querySelector( `[data-row="${ term.id }"]` ), field ); }
+			whereAmI( input );
+		}
+	}
+}
+
+async function pageStep( dir, field ) {
+	if ( state.walk ) {
+		const next = state.walkIndex + dir;
+		if ( next >= 0 && next < state.terms.length ) { state.walkIndex = next; render(); focusCell( document.querySelector( '.ace-tax-table tbody tr' ), field ); return; }
+	}
+	const page = state.page + dir;
+	if ( page < 1 || page > state.totalPages ) return;
+	state.page = page; state.walkIndex = dir > 0 ? 0 : Math.max( 0, state.terms.length - 1 );
+	await loadTerms(); render();
+	const rows = document.querySelectorAll( '.ace-tax-table tbody tr' );
+	focusCell( dir > 0 ? rows[ 0 ] : rows[ rows.length - 1 ], field );
+}
+
+function whereAmI( node ) {
+	const bar = document.querySelector( '.ace-tax-where' );
+	const input = cellOf( node );
+	if ( ! bar ) return;
+	document.querySelectorAll( '.ace-tax-table tr.is-focused' ).forEach( ( r ) => r.classList.remove( 'is-focused' ) );
+	if ( ! input ) { bar.textContent = ''; return; }
+	const row = input.closest( 'tr' ); row.classList.add( 'is-focused' );
+	const idx = [ ...row.parentElement.children ].indexOf( row ) + 1;
+	const term = state.terms.find( ( t ) => t.id === parseInt( input.dataset.term, 10 ) );
+	bar.textContent = `${ term?.values?.name ?? '#' + input.dataset.term } · ${ state.fields[ input.dataset.field ]?.label ?? input.dataset.field } · row ${ idx } of ${ row.parentElement.children.length } · page ${ state.page } of ${ state.totalPages }`;
 }
 
 function readInput( input ) {
@@ -226,6 +307,10 @@ function render() {
 	}
 	root.append( toolbar );
 	if ( ! state.taxonomy ) return;
+	root.append( el( 'div', { class: 'ace-tax-keys' }, [
+		el( 'span', { class: 'ace-tax-where', 'aria-live': 'polite' } ),
+		el( 'span', { class: 'ace-tax-keys__list' }, KEYS.map( ( [ k, what ] ) => el( 'span', { class: 'ace-tax-keys__item' }, [ el( 'kbd', {}, k ), ` ${ what }` ] ) ) ),
+	] ) );
 
 	// Field picker
 	root.append( el( 'div', { class: 'ace-tax-fields' }, Object.entries( state.fields ).map( ( [ key, def ] ) =>
@@ -276,6 +361,8 @@ function render() {
 		] ) ) ),
 	] );
 	root.append( table );
+	table.addEventListener( 'focusin', ( e ) => whereAmI( e.target ) );
+	table.addEventListener( 'keydown', keyNav );
 
 	// Pagination / walk controls
 	const nav = el( 'div', { class: 'ace-tax-nav' } );

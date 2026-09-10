@@ -2048,6 +2048,45 @@ body.admin-color-midnight {
         margin: 12px 0;
     }
 
+    .ace-tax-keys {
+        position: sticky;
+        top: 32px;
+        z-index: 5;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 14px;
+        margin: 0 0 10px;
+        padding: 8px 12px;
+        background: $surface-color;
+        border: 1px solid $border-color;
+        border-radius: 6px;
+        font-size: 12px;
+
+        .ace-tax-where {
+            flex: 1 1 100%;
+            font-weight: 600;
+            min-height: 1.4em;
+        }
+
+        &__list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 14px;
+            color: $text-color-light;
+        }
+
+        kbd {
+            font-family: inherit;
+            font-size: 11px;
+            padding: 1px 6px;
+            border: 1px solid $border-color;
+            border-bottom-width: 2px;
+            border-radius: 4px;
+            background: #f6f7f7;
+        }
+    }
+
     .ace-tax-fields {
         display: flex;
         flex-wrap: wrap;
@@ -2071,6 +2110,10 @@ body.admin-color-midnight {
         select {
             width: 100%;
             min-width: 120px;
+        }
+
+        tr.is-focused td {
+            background: rgba($primary-color, 0.06);
         }
 
         .ace-tax-sort {

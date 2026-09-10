@@ -2,6 +2,9 @@
 
 Plain-English record of what changed in each release. Dates are when the version was pushed.
 
+## 0.3.1 - 10 September 2026
+- Batch editor keyboard model: a legend above the table and a live "where am I" line (term, field, row, page). Enter saves and moves down, Shift+Enter up, Ctrl+Enter saves in place, arrows move between rows in the same field, Ctrl+arrows jump to the first or last row, Alt+arrows change page, Esc puts a cell back.
+
 ## 0.3.0 - 10 September 2026
 - Batch editor inputs now follow the field: colour picker, media picker, select, date, URL, number, checkbox. Column headers sort the page.
 - Enter saves a row and moves to the same field on the next row (Shift+Enter goes up).

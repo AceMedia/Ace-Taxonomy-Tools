@@ -3,7 +3,7 @@
  * Plugin Name: Ace Taxonomy Tools
  * Plugin URI: https://github.com/AceMedia/Ace-Taxonomy-Tools
  * Description: Batch term editor and retired/archived terms for any taxonomy.
- * Version: 0.3.0
+ * Version: 0.3.1
  * Author: AceMedia
  * Author URI: https://acemedia.ninja
  * Text Domain: ace-taxonomy-tools
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Bump on every release: drives asset cache-busting and the options migration check.
-define( 'ACE_TAXONOMY_TOOLS_VERSION', '0.3.0' );
+define( 'ACE_TAXONOMY_TOOLS_VERSION', '0.3.1' );
 define( 'ACE_TAXONOMY_TOOLS_FILE', __FILE__ );
 define( 'ACE_TAXONOMY_TOOLS_PATH', plugin_dir_path( __FILE__ ) );
 define( 'ACE_TAXONOMY_TOOLS_URL', plugin_dir_url( __FILE__ ) );
