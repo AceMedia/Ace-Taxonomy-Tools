@@ -130,7 +130,13 @@ final class Ace_Taxonomy_Tools_REST {
     }
 
     private function term_row( WP_Term $term, array $fields ): array {
-        $row = [ 'id' => $term->term_id, 'count' => $term->count, 'link' => get_edit_term_link( $term ), 'values' => [] ];
+        $row = [
+            'id'       => $term->term_id,
+            'count'    => $term->count,
+            'children' => is_taxonomy_hierarchical( $term->taxonomy ) ? count( get_term_children( $term->term_id, $term->taxonomy ) ) : 0,
+            'link'     => get_edit_term_link( $term ),
+            'values'   => [],
+        ];
         foreach ( $fields as $key => $field ) {
             $row['values'][ $key ] = 'core' === $field['source'] ? $term->$key : get_term_meta( $term->term_id, $key, true );
         }

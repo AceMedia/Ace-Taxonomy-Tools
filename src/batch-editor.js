@@ -22,6 +22,7 @@ const state = {
 	terms: [],
 	walk: false,
 	walkIndex: 0,
+	parents: [],
 };
 
 const el = ( tag, attrs = {}, children = [] ) => {
@@ -29,7 +30,7 @@ const el = ( tag, attrs = {}, children = [] ) => {
 	Object.entries( attrs ).forEach( ( [ k, v ] ) => {
 		if ( k === 'class' ) node.className = v;
 		else if ( k.startsWith( 'on' ) ) node.addEventListener( k.slice( 2 ), v );
-		else if ( v !== null && v !== undefined ) node.setAttribute( k, v );
+		else if ( v !== null && v !== undefined && v !== false ) node.setAttribute( k, v === true ? '' : v );
 	} );
 	( Array.isArray( children ) ? children : [ children ] ).forEach( ( c ) => {
 		if ( c === null || c === undefined ) return;
@@ -61,8 +62,17 @@ function restore() {
 	} catch ( e ) {}
 }
 
+async function loadParents() {
+	state.parents = [];
+	const tax = ( CFG.taxonomies || [] ).find( ( t ) => t.name === state.taxonomy );
+	if ( ! tax?.hierarchical ) return;
+	const { body } = await api( `/terms?taxonomy=${ state.taxonomy }&parent=0&per_page=500` );
+	state.parents = body.filter( ( t ) => t.children > 0 ).map( ( t ) => ( { id: t.id, name: t.values.name } ) );
+}
+
 async function loadFields() {
 	if ( ! state.taxonomy ) return;
+	await loadParents();
 	const { body } = await api( `/fields?taxonomy=${ state.taxonomy }` );
 	state.fields = body.fields;
 	state.chosen = state.chosen.filter( ( k ) => body.fields[ k ] );
@@ -169,7 +179,11 @@ function render() {
 
 	const tax = ( CFG.taxonomies || [] ).find( ( t ) => t.name === state.taxonomy );
 	if ( tax?.hierarchical ) {
-		toolbar.append( el( 'input', { type: 'number', placeholder: 'Parent id (-1 = all, 0 = top level)', value: state.parent, onchange: async ( e ) => { state.parent = parseInt( e.target.value, 10 ); state.page = 1; await loadTerms(); render(); } } ) );
+		toolbar.append( el( 'select', { onchange: async ( e ) => { state.parent = parseInt( e.target.value, 10 ); state.page = 1; await loadTerms(); render(); } }, [
+			el( 'option', { value: -1, selected: state.parent === -1 }, 'All terms' ),
+			el( 'option', { value: 0, selected: state.parent === 0 }, 'Top level only' ),
+			...state.parents.map( ( p ) => el( 'option', { value: p.id, selected: state.parent === p.id }, `Children of ${ p.name }` ) ),
+		] ) );
 	}
 	root.append( toolbar );
 	if ( ! state.taxonomy ) return;

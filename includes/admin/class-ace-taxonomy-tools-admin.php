@@ -1,10 +1,10 @@
 <?php
 /**
- * Admin settings page for Ace Taxonomy Tools.
+ * Settings page for Ace Taxonomy Tools (Settings → Ace Taxonomy Tools).
  *
- * Same two-column layout and fixed save bar as Ace Crawl Enhancer / Ace Redis
- * Cache so the Ace plugins feel like one product. Saves over admin-ajax with a
- * nonce + capability check; the SaveBar handles change tracking and auto-save.
+ * Same two-column layout, sidebar sub-navigation, fieldset groups and fixed
+ * save bar as Ace Crawl Enhancer / Ace Redis Cache. Every tab carries a guide
+ * panel, the screen has WordPress help tabs, and a Guide tab holds the manual.
  *
  * @package Ace_Taxonomy_Tools
  */
@@ -15,11 +15,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 final class Ace_Taxonomy_Tools_Admin {
 
-    const PAGE = 'ace-taxonomy-tools';
-    const CAP  = 'manage_options';
+    const PAGE  = 'ace-taxonomy-tools';
+    const CAP   = 'manage_options';
     const NONCE = 'ace_taxonomy_tools_admin_nonce';
 
     private static $instance = null;
+    private $hook = '';
 
     public static function instance(): self {
         if ( null === self::$instance ) {
@@ -36,30 +37,35 @@ final class Ace_Taxonomy_Tools_Admin {
     }
 
     public function register_menu(): void {
-        add_menu_page(
+        $this->hook = add_options_page(
             'Ace Taxonomy Tools',
             'Taxonomy Tools',
             self::CAP,
             self::PAGE,
-            [ $this, 'render_settings_page' ],
-            'dashicons-tag',
-            58
+            [ $this, 'render_settings_page' ]
         );
-        add_submenu_page( self::PAGE, __( 'Settings', 'ace-taxonomy-tools' ), __( 'Settings', 'ace-taxonomy-tools' ), self::CAP, self::PAGE, [ $this, 'render_settings_page' ] );
+        add_action( 'load-' . $this->hook, [ $this, 'help_tabs' ] );
     }
 
     public function action_links( array $links ): array {
-        $url = $this->settings_url();
-        array_unshift( $links, '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Settings', 'ace-taxonomy-tools' ) . '</a>' );
+        array_unshift( $links, '<a href="' . esc_url( self::url() ) . '">' . esc_html__( 'Settings', 'ace-taxonomy-tools' ) . '</a>' );
+        $links[] = '<a href="' . esc_url( self::url( 'guide' ) ) . '">' . esc_html__( 'Guide', 'ace-taxonomy-tools' ) . '</a>';
         return $links;
     }
 
-    public function settings_url(): string {
-        return admin_url( 'admin.php?page=' . self::PAGE );
+    /**
+     * URL of the settings page, optionally deep-linked to a tab (and section).
+     */
+    public static function url( string $tab = '', string $section = '' ): string {
+        $url = admin_url( 'options-general.php?page=' . self::PAGE );
+        if ( $tab ) {
+            $url .= '#' . $tab . ( $section ? '/' . $section : '' );
+        }
+        return $url;
     }
 
     public function is_plugin_screen( string $hook ): bool {
-        return false !== strpos( $hook, self::PAGE );
+        return $hook === $this->hook;
     }
 
     public function enqueue( string $hook ): void {
@@ -82,6 +88,33 @@ final class Ace_Taxonomy_Tools_Admin {
             'save_action' => 'ace_taxonomy_tools_save_settings',
             'storage_key' => 'ace_taxonomy_tools_auto_save_enabled',
         ] );
+
+        /**
+         * Other screens folded into this settings page (batch editor, overview...) enqueue here.
+         */
+        do_action( 'ace_taxonomy_tools_settings_enqueue', $hook );
+    }
+
+    /**
+     * WordPress contextual help (the "Help" pull-down top right), from the guide.
+     */
+    public function help_tabs(): void {
+        $screen = get_current_screen();
+        if ( ! $screen ) {
+            return;
+        }
+        foreach ( Ace_Taxonomy_Tools_Guide::sections() as $id => $section ) {
+            $screen->add_help_tab( [
+                'id'      => 'ace-taxonomy-tools-' . $id,
+                'title'   => $section['title'],
+                'content' => wp_kses_post( $section['content'] ),
+            ] );
+        }
+        $screen->set_help_sidebar(
+            '<p><strong>' . esc_html__( 'More', 'ace-taxonomy-tools' ) . '</strong></p>' .
+            '<p><a href="' . esc_url( self::url( 'guide' ) ) . '">' . esc_html__( 'Full guide', 'ace-taxonomy-tools' ) . '</a></p>' .
+            '<p><a href="https://github.com/AceMedia/Ace-Taxonomy-Tools/issues" target="_blank" rel="noopener">' . esc_html__( 'Roadmap and issues', 'ace-taxonomy-tools' ) . '</a></p>'
+        );
     }
 
     public function render_settings_page(): void {
@@ -91,6 +124,8 @@ final class Ace_Taxonomy_Tools_Admin {
         $options = Ace_Taxonomy_Tools_Settings::all();
         $fields  = Ace_Taxonomy_Tools_Settings::fields();
         $tabs    = Ace_Taxonomy_Tools_Settings::tabs();
+        $tabs[]  = [ 'id' => 'guide', 'label' => __( 'Guide', 'ace-taxonomy-tools' ), 'icon' => 'book', 'custom' => true, 'help' => '' ];
+        $intro   = "Edit hundreds of terms in one screen, and retire the ones that are finished with without breaking their archives.";
         $admin   = $this;
         include ACE_TAXONOMY_TOOLS_PATH . 'includes/admin/views/settings.php';
     }
@@ -108,8 +143,20 @@ final class Ace_Taxonomy_Tools_Admin {
     }
 
     /**
-     * Render one field from the schema. Escaping happens here, late.
+     * Render one setting row (label + field + description) from the schema. Escaping happens here, late.
      */
+    public function render_row( string $key, array $field, $value ): void {
+        $id = esc_attr( self::PAGE . '-' . $key );
+        echo '<div class="setting-row">';
+        echo '<div class="setting-label"><label for="' . $id . '">' . esc_html( $field['label'] ) . '</label></div>';
+        echo '<div class="setting-field">';
+        $this->render_field( $key, $field, $value );
+        if ( ! empty( $field['help'] ) ) {
+            echo '<p class="description">' . esc_html( $field['help'] ) . '</p>';
+        }
+        echo '</div></div>';
+    }
+
     public function render_field( string $key, array $field, $value ): void {
         $id = esc_attr( self::PAGE . '-' . $key );
         switch ( $field['type'] ) {
@@ -155,7 +202,7 @@ final class Ace_Taxonomy_Tools_Admin {
                 $chosen = is_array( $value ) ? $value : [];
                 echo '<div class="ace-check-grid">';
                 foreach ( $objects as $object ) {
-                    if ( 'post_types' === $field['type'] && in_array( $object->name, [ 'attachment', 'wp_block', 'wp_template', 'wp_template_part', 'wp_navigation', 'wp_global_styles', 'wp_font_family', 'wp_font_face' ], true ) ) {
+                    if ( 'post_types' === $field['type'] && in_array( $object->name, [ 'attachment', 'wp_block', 'wp_template', 'wp_template_part', 'wp_navigation', 'wp_global_styles', 'wp_font_family', 'wp_font_face', 'ace_ad' ], true ) ) {
                         continue;
                     }
                     printf(
@@ -176,10 +223,29 @@ final class Ace_Taxonomy_Tools_Admin {
                     esc_attr( (string) $value )
                 );
         }
-        if ( ! empty( $field['help'] ) ) {
-            echo '<p class="description">' . esc_html( $field['help'] ) . '</p>';
+    }
+
+    /**
+     * Collapsible guide panel shown at the top of a tab (Redis "Traffic Scope Guide" style).
+     */
+    public static function guide_panel( string $tab_id, string $text ): void {
+        if ( '' === trim( $text ) ) {
+            return;
         }
+        ?>
+        <div class="ace-guide-panel" data-guide="<?php echo esc_attr( $tab_id ); ?>">
+            <div class="ace-guide-panel__head">
+                <h3><span class="dashicons dashicons-info-outline" aria-hidden="true"></span><?php esc_html_e( 'How this works', 'ace-taxonomy-tools' ); ?></h3>
+                <button type="button" class="button button-secondary ace-guide-panel__toggle" aria-expanded="true">
+                    <span class="dashicons dashicons-visibility" aria-hidden="true"></span>
+                    <span class="ace-guide-panel__toggle-text"><?php esc_html_e( 'Hide guide', 'ace-taxonomy-tools' ); ?></span>
+                </button>
+            </div>
+            <div class="ace-guide-panel__body"><?php echo wp_kses_post( wpautop( $text ) ); ?></div>
+        </div>
+        <?php
     }
 }
 
+require_once ACE_TAXONOMY_TOOLS_PATH . 'includes/admin/class-ace-taxonomy-tools-guide.php';
 Ace_Taxonomy_Tools_Admin::instance();

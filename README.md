@@ -33,7 +33,16 @@ npm run build
 
 Plugin-specific hooks are documented in the source next to each `apply_filters` / `do_action`.
 
+## Where things are
+
+- **Settings → Taxonomy Tools**: the Batch editor is the first tab; Editor settings and Retired terms follow; Guide holds the manual. Each term list screen links straight to the batch editor.
+
 ## Changelog
+
+### 0.2.0
+- Everything now lives under **Settings → Taxonomy Tools** (no top-level menu): Batch editor, Editor settings, Retired terms, Guide.
+- Batch editor: parent filter is a dropdown of parents; "Batch edit these terms" link on each term list screen.
+- Guide panels on every tab, WordPress help tabs, full Guide tab.
 
 ### 0.1.0
 - Initial scaffold: settings page, options store, build tooling.
